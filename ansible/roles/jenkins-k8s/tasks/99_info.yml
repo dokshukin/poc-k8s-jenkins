@@ -1,0 +1,8 @@
+---
+
+- name: INFO MESSAGE
+  debug:
+    msg: |
+      ================================================================
+      Jenkins is running on http://{{ ansible_host }}:{{ jenkins_k8s_expose_port }}
+      ================================================================

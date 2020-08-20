@@ -1,0 +1,28 @@
+---
+- name: create predefined groups
+  group:
+    name: "{{ item }}"
+  with_items: "{{ users_groups }}"
+
+- name: create sudo config
+  template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/sudo
+    owner: root
+    group: root
+    mode: 0440
+
+- name: manage user account
+  include_tasks: user.yml
+  with_items: "{{ users_list }}"
+  when: "(user.server_groups is not defined) or (group_names | intersect(user.server_groups) | length | bool)"
+  loop_control:
+    loop_var: user
+
+- name: add public keys for user root
+  authorized_key:
+    user: root
+    key: "{{ item.public_key }}"
+    comment: "{{ item.name }}"
+    state: "{{ item.state|default(omit) }}"
+  with_items: "{{ users_root_ssh_keys }}"

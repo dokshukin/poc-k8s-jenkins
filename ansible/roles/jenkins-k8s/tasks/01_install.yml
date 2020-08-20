@@ -1,0 +1,154 @@
+---
+
+- name: Ensure local dir exists
+  file:
+    path: "{{ jenkins_k8s_local_storage_dir }}"
+    state: directory
+    owner: "{{ jenkins_k8s_uid }}"
+    group: "{{ jenkins_k8s_uid }}"
+
+- name: Jenkins namespace in k8s
+  k8s:
+    name: "{{ jenkins_k8s_namespace }}"
+    kind: Namespace
+    state: "{{ jenkins_k8s_enabled | ternary('present','absent') }}"
+
+- name: StorageClass in k8s
+  k8s:
+    state: "{{ jenkins_k8s_enabled | ternary('present','absent') }}"
+    namespace: "{{ jenkins_k8s_namespace }}"
+    definition:
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: local-storage
+      provisioner: kubernetes.io/no-provisioner
+      volumeBindingMode: WaitForFirstConsumer
+
+- name: PersistentVolume (PV) in k8s
+  k8s:
+    state: "{{ jenkins_k8s_enabled | ternary('present','absent') }}"
+    namespace: "{{ jenkins_k8s_namespace }}"
+    definition:
+      apiVersion: v1
+      kind: PersistentVolume
+      metadata:
+        name: "{{ jenkins_k8s_pvc_home }}"
+        labels:
+          name: "{{ jenkins_k8s_pvc_home }}"
+      spec:
+        capacity:
+          storage: "{{ jenkins_k8s_local_storage_dir_size }}"
+        volumeMode: Filesystem
+        accessModes:
+        - ReadWriteOnce
+        persistentVolumeReclaimPolicy: Delete
+        storageClassName: local-storage
+        local:
+          path: "{{ jenkins_k8s_local_storage_dir }}"
+        nodeAffinity:
+          required:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - "{{ jenkins_k8s_local_storage_node }}"
+
+- name: PersistentVolumeClaim (PVC) in k8s
+  k8s:
+    state: "{{ jenkins_k8s_enabled | ternary('present','absent') }}"
+    namespace: "{{ jenkins_k8s_namespace }}"
+    definition:
+      kind: PersistentVolumeClaim
+      apiVersion: v1
+      metadata:
+        name: "{{ jenkins_k8s_pvc_home }}-claim"
+      spec:
+        storageClassName: local-storage
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ jenkins_k8s_local_storage_dir_size }}"
+        selector:
+          matchLabels:
+            name: "{{ jenkins_k8s_pvc_home }}"
+
+- name: Jenkins k8s deployment
+  k8s:
+    state:     "{{ jenkins_k8s_enabled | ternary('present','absent') }}"
+    namespace: "{{ jenkins_k8s_namespace }}"
+    definition:
+      apiVersion: v1
+      kind: Deployment
+      metadata:
+        name: jenkins-master
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: jenkins
+        template:
+          metadata:
+            labels:
+              app: jenkins
+          spec:
+            containers:
+            - name: jenkins
+              image: jenkins/jenkins:lts
+              env:
+                - name: JAVA_OPTS
+                  value: "-Djenkins.install.runSetupWizard=false"
+                - name: JENKINS_OPTS
+                  value: "--argumentsRealm.roles.user={{ jenkins_k8s_admin_user }} --argumentsRealm.passwd.admin={{ jenkins_k8s_admin_password }} --argumentsRealm.roles.admin={{ jenkins_k8s_admin_user }}"
+              ports:
+                - name: http-port
+                  containerPort: "{{ jenkins_k8s_container_port }}"
+                - name: jnlp-port
+                  containerPort: "{{ jenkins_k8s_container_jnlp_port }}"
+              volumeMounts:
+                - name: "{{ jenkins_k8s_pvc_home }}-claim"
+                  mountPath: "{{ jenkins_k8s_home_dir }}"
+                  readOnly: False
+            volumes:
+              - name: "{{ jenkins_k8s_pvc_home }}-claim"
+                persistentVolumeClaim:
+                  claimName: "{{ jenkins_k8s_pvc_home }}-claim"
+
+- name: Jenkins k8s service
+  k8s:
+    state:     "{{ jenkins_k8s_enabled | ternary('present','absent') }}"
+    namespace: "{{ jenkins_k8s_namespace }}"
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: jenkins
+      spec:
+        type: NodePort
+        ports:
+          - name: http-jenkins
+            port: "{{ jenkins_k8s_container_port }}"
+            targetPort: "{{ jenkins_k8s_container_port }}"
+            nodePort: "{{ jenkins_k8s_expose_port }}"
+          - name: jnlp-jenkins
+            port: "{{ jenkins_k8s_container_jnlp_port }}"
+            targetPort: "{{ jenkins_k8s_container_jnlp_port }}"
+        selector:
+          app: jenkins
+
+
+- name: Wait for Jenkins to start up
+  uri:
+    url: "http://{{ ansible_host }}:{{ jenkins_k8s_expose_port }}"
+    status_code: 200
+    timeout: 5
+  register: _jenkins_k8s_service_status
+  # Keep trying for 1 min in 5 sec intervals
+  retries: 12
+  delay: 5
+  until: >
+     'status' in _jenkins_k8s_service_status and
+     _jenkins_k8s_service_status['status'] == 200
+  when: jenkins_k8s_enabled

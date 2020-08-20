@@ -1,0 +1,9 @@
+---
+users_list:
+  - login: ilya_dokshukin
+    name: Ilya Dokshukin
+    email: dokshukin@gmail.com
+    public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDg3IpwS0Dy5NI4KFnLLbtaV4amOYG0S/F5My0/T+0nvCzsptLe/egmUudTjwX6GMN22KxEstcWHBNoPW02vf9TEpkfTt3Wt3sKTcberFEV08lrWzhsxJahjaxWF6O40w7adFSi4R2oir5iFOR2u0BC3LsfUkZCapCnkZpy3i1+eabXwGbW8K0qlNIbsHhK97IKMnSawcuX3KwWyGwpuL7VCTDJFgGm5Lz8WLV/e2iOzceYCnS8erCsXE6RKialq4QkEcMZNq7t9l9gZoAUoFlKG/y2q+xYxGXGx52RloDmaDwoAZZ1exDHBwpzH7TM9DoO50/5Yyx+DZP3MmnsyQYr dark@Dark.local"
+    groups:
+      - sudo
+    state: present

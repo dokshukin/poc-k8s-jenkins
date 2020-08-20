@@ -1,0 +1,34 @@
+---
+
+- name: create config file on k8s node
+  changed_when: false
+  template:
+    src: pipeline.xml.j2
+    dest: "/tmp/{{ item.name }}.xml"
+  when: item.name in _jenkins_k8s_jobs_to_install or
+    item.name in _jenkins_k8s_jobs_to_update
+
+- name: copy job XML file into container
+  changed_when: false
+  command: |
+    kubectl -n {{ jenkins_k8s_namespace }} cp /tmp/{{ item.name }}.xml {{ _jenkins_k8s_pods.stdout }}:/tmp/{{ item.name }}.xml
+  when: item.name in _jenkins_k8s_jobs_to_install or
+    item.name in _jenkins_k8s_jobs_to_update
+
+- name: create job
+  shell: |
+    {{ _jenkins_k8s_kubectl_cmd }} java -jar /tmp/jenkins-cli.jar -s http://0:{{ jenkins_k8s_container_port }} create-job {{ item.name }} < /tmp/{{ item.name }}.xml
+  when: item.name in _jenkins_k8s_jobs_to_install
+
+### update is not idempotent, should diff config
+# - name: update job
+#   changed_when: false
+#   shell: |
+#     {{ _jenkins_k8s_kubectl_cmd }} java -jar /tmp/jenkins-cli.jar -s http://0:{{ jenkins_k8s_container_port }} update-job {{ item.name }} < /tmp/{{ item.name }}.xml
+#   when: item.name in _jenkins_k8s_jobs_to_update
+
+- name: remove obsolete config file
+  changed_when: false
+  file:
+    path: "/tmp/{{ item.name }}.xml"
+    state: absent

@@ -1,0 +1,11 @@
+*.retry
+**/.terraform
+
+# no centralized storage for state-files in test exercise.
+terraform.tfstate*
+
+# Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class

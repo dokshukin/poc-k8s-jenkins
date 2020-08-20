@@ -1,0 +1,30 @@
+---
+
+- name: Install openshift python extention
+  tags: jenkins::install
+  pip:
+    name: openshift
+
+- name: dirty workaround to run DinD in k8s
+  file:
+    path: /var/run/docker.sock
+    mode: "o+rw"
+
+- name: start in kubernetes
+  include_tasks: 01_install.yml
+  tags: jenkins::install
+  when: kubernetes_role == 'master'
+
+- name: install pugins
+  include_tasks: 02_plugins.yml
+  tags: jenkins::plugins
+  when: kubernetes_role == 'master' and jenkins_k8s_enabled
+
+- name: install pipelines
+  include_tasks: 03_pipelines.yml
+  tags: jenkins::pipelines
+  when: kubernetes_role == 'master' and jenkins_k8s_enabled
+
+- name: print info
+  include_tasks: 99_info.yml
+  when: kubernetes_role == 'master' and jenkins_k8s_enabled

@@ -1,0 +1,23 @@
+---
+
+### We have only root user with known password when servers were created.
+### To add "normal" users we need to play first (with known root password):
+### ansible-playbook playbook.yml -t users -u root -k
+
+- hosts: all
+  become: true
+  roles:
+    - role: users
+      tags: users
+
+- hosts: kube_nodes
+  become: true
+  roles:
+    - role: geerlingguy.pip
+      tags: pip, kubernetes
+    - role: geerlingguy.docker
+      tags: docker, kubernetes
+    - role: geerlingguy.kubernetes
+      tags: k8s, kubernetes
+    - role: jenkins-k8s
+      tags: jenkins-k8s, jenkins

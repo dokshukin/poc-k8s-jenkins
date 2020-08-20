@@ -1,0 +1,27 @@
+---
+
+- name: pipelines
+  when: _jenkins_k8s_pods.stdout_lines|length == 1
+  block:
+    - name: list of installed jobs
+      changed_when: False
+      check_mode: False
+      command: |
+        {{ _jenkins_k8s_kubectl_cmd }} java -jar /tmp/jenkins-cli.jar -s http://0:{{ jenkins_k8s_container_port }} list-jobs
+      register: _jenkins_k8s_list_of_jobs
+
+    - name: generate lists of jobs to install, remove and update
+      set_fact:
+        _jenkins_k8s_jobs_to_install: "{{ (jenkins_k8s_pipelines | map(attribute='name') | list) | difference (_jenkins_k8s_list_of_jobs.stdout_lines) }}"
+        _jenkins_k8s_jobs_to_update:  "{{ (jenkins_k8s_pipelines | map(attribute='name') | list) | intersect (_jenkins_k8s_list_of_jobs.stdout_lines) }}"
+        _jenkins_k8s_jobs_to_remove:  "{{ _jenkins_k8s_list_of_jobs.stdout_lines | difference ( (jenkins_k8s_pipelines | map(attribute='name') | list)) }}"
+
+    - name: delete pipeline jobs
+      changed_when: True
+      command: |
+        {{ _jenkins_k8s_kubectl_cmd }} java -jar /tmp/jenkins-cli.jar -s http://0:{{ jenkins_k8s_container_port }} delete-job {{ item }}
+      with_items: "{{ _jenkins_k8s_jobs_to_remove }}"
+
+    - name: install or update pipeline jobs
+      include_tasks: pipelines/pipelines_cli.yml
+      with_items: "{{ jenkins_k8s_pipelines }}"

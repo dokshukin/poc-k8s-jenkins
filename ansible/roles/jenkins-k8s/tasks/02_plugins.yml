@@ -1,0 +1,96 @@
+---
+
+### This is ugly.
+### But there are only two options to install plugins in Jenkins:
+### 1. WEB UI (not our way)
+### 2. With CLI (our way)
+### The second option could be used directly with "java -jar /tmp/jenkins-cli.jar",
+### and there is also ansible module "jenkins_plugin" available. But I didn't succeed with
+### native ansible module in kubernetes installation. Not sure if it's possible at all.
+
+- name: register running pods
+  shell: kubectl get pod -n jenkins -o name | awk -F/ '{print $2}'
+  check_mode: False
+  changed_when: False
+  register: _jenkins_k8s_pods
+
+- name: register empty list _jenkins_k8s_plugins_to_install
+  set_fact:
+    _jenkins_k8s_plugins_to_install: []
+
+- name: handle list of installed plugins
+  check_mode: False
+  when: _jenkins_k8s_pods.stdout_lines|length == 1
+  block:
+    - name: Install CLI jar
+      changed_when: False
+      command: >
+        {{ _jenkins_k8s_kubectl_cmd }} wget -qm 0:{{ jenkins_k8s_container_port }}/jnlpJars/jenkins-cli.jar -O /tmp/jenkins-cli.jar
+
+    - name: Get list of installed plugins
+      changed_when: False
+      shell: |
+        {{ _jenkins_k8s_kubectl_cmd }} java -jar /tmp/jenkins-cli.jar -s http://0:{{ jenkins_k8s_container_port }} list-plugins | awk '{print $1}'
+      register: _jenkins_k8s_plugins_list
+
+    - name: fullfil _jenkins_k8s_plugins_to_install list with elements
+      set_fact:
+        _jenkins_k8s_plugins_to_install: "{{ jenkins_k8s_plugins | difference (_jenkins_k8s_plugins_list.stdout_lines) }}"
+
+
+- name: Install required plugins
+  command: |
+    {{ _jenkins_k8s_kubectl_cmd }} java -jar /tmp/jenkins-cli.jar -s http://0:{{ jenkins_k8s_container_port }} install-plugin {{ item }}
+  with_items: "{{ _jenkins_k8s_plugins_to_install }}"
+
+
+- name: prepare kebernetes configs
+  when: '"kubernetes" in jenkins_k8s_plugins'
+  block:
+    - name: set cloud group in jenkins central config.xml
+      template:
+        dest: "{{ jenkins_k8s_local_storage_dir }}/config.xml"
+        src: jenkins_config.xml.j2
+        owner: "{{ jenkins_k8s_uid }}"
+        group: "{{ jenkins_k8s_uid }}"
+        mode: 0644
+
+    - name: create .kube dir at jenkins home
+      file:
+        path: "{{ jenkins_k8s_local_storage_dir }}/.kube"
+        state: directory
+        owner: "{{ jenkins_k8s_uid }}"
+        group: "{{ jenkins_k8s_uid }}"
+
+    - name: get admin kubernetes config
+      no_log: True
+      slurp:
+        src: /etc/kubernetes/admin.conf
+      register: _jenkins_k8s_kube_config
+
+    - name: copy content from main k8s auth file
+      copy:
+        content: "{{ _jenkins_k8s_kube_config['content'] | b64decode }}"
+        dest: "{{ jenkins_k8s_local_storage_dir }}/.kube/config"
+        owner: "{{ jenkins_k8s_uid }}"
+        group: "{{ jenkins_k8s_uid }}"
+        mode: 0600
+
+- name: Jenkins restart after plugin installation
+  command: |
+    {{ _jenkins_k8s_kubectl_cmd }} java -jar /tmp/jenkins-cli.jar -s http://0:{{ jenkins_k8s_container_port }} safe-restart
+  when: _jenkins_k8s_plugins_to_install|length > 0
+
+- name: Wait for Jenkins to start up
+  uri:
+    url: "http://{{ ansible_host }}:{{ jenkins_k8s_expose_port }}"
+    status_code: 200
+    timeout: 5
+  register: _jenkins_k8s_service_status
+  # Keep trying for 1 min in 5 sec intervals
+  retries: 12
+  delay: 5
+  until: >
+     'status' in _jenkins_k8s_service_status and
+     _jenkins_k8s_service_status['status'] == 200
+

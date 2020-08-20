@@ -1,0 +1,25 @@
+---
+jenkins_k8s_enabled: True
+jenkins_k8s_namespace: jenkins
+jenkins_k8s_pvc_home: jenkins
+jenkins_k8s_home_dir: /var/jenkins_home
+
+jenkins_k8s_admin_user: admin
+jenkins_k8s_admin_password: admin
+
+jenkins_k8s_expose_port: 30000
+jenkins_k8s_container_port: 8080
+jenkins_k8s_container_jnlp_port: 50000
+
+jenkins_k8s_plugins: []
+
+jenkins_k8s_pipelines: []
+jenkins_k8s_pipelines_force_update: False
+
+# shortcut
+_jenkins_k8s_kubectl_cmd: kubectl exec --stdin -n {{ jenkins_k8s_namespace }} {{ _jenkins_k8s_pods.stdout }} --
+
+jenkins_k8s_local_storage_dir: /data/jenkins-k8s
+jenkins_k8s_local_storage_dir_size: 1Gi
+jenkins_k8s_uid: "1000"
+jenkins_k8s_local_storage_node: ny-k8s-node01

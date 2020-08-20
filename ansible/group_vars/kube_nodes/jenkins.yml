@@ -1,0 +1,18 @@
+# should be encrypted
+jenkins_k8s_admin_password: GimmeGimme
+
+
+jenkins_k8s_plugins:
+  - git                     # to work with git scm
+  - kubernetes              # to spin up pods for pipelines
+  - workflow-aggregator     # enables multibranch pipelines
+
+jenkins_k8s_pipelines:
+  - name: bofh  # mandatory, one word
+    git: 'https://github.com/dokshukin/go-bastard-operator' # mandatory
+    description: 'BastardOperatorFromHell clone project for testing purpose'
+    displayName: 'Bastard operator'
+
+
+### uncomment to remove jenkins deployment from kubernetes
+# jenkins_k8s_enabled: False

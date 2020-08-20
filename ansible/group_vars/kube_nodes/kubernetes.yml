@@ -1,0 +1,5 @@
+---
+
+kubernetes_allow_pods_on_master: true
+kubernetes_role: node
+kubernetes_enable_web_ui: True
