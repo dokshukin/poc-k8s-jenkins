@@ -27,11 +27,12 @@ export DIGITALOCEAN_TOKEN=here-should-be-your-token
 
 #### Create infrastructure with Terraform
 ```
-cd ./terraform-digital-ocean
+git clone https://github.com/dokshukin/poc-k8s-jenkins.git
+cd poc-k8s-jenkins/terraform-digital-ocean/
 terrafrom init
 terrafrom apply
 ```
-Terraform will create 3 servers for Kubernetes, some firewall rules, and set to `root` user predefined password.
+Terraform will create 3 servers for Kubernetes, some firewall rules, and set predefined password to the `root` user.
 
 
 ### Set up Kubernetes+CI/CD with Ansible
@@ -41,23 +42,23 @@ Now we have 3 servers (droplets) running in Digital Ocean.
 Add your user(s) and ssh key(s) in `ansible/group_vars/all/users.yml`
 > alternatively add your keys in `terraform-digital-ocean/cloud_init/user_data.yaml` (not recommended, not tested)
 
-The tiny dynamic inventory script was writtent to make ansible repatable on different environments.  
+The tiny dynamic inventory script was written to make ansible repeatable in different environments.  
 First time ansible should be played with root user to create other users:
 ```
 cd ../ansible
 ansible-playbook playbook.yml -t users -u root -k
 ```
 There will appear prompt with request of password. Type it there, press ENTER.
-> sshpass need be installed on your system to use `-k` flag with ansible
+> sshpass need to be installed on your system to use `-k` flag with ansible
 
-From now you can use your ssh user+key pair access servers and play ansible roles.
+From now you can use your ssh user+key pair to access servers and play ansible roles.
 > You have to wait 2-3 minutes after creating droplets with terraform to use apt.
 
 Let's spin up our service:
 ```
 ansible-playbook playbook.yml
 ```
-When ansible will finish its job it will print the URL to connect to Jenkins UI. For example:
+When ansible will finish its job (approx. 5 min) it will print the URL to connect to the Jenkins Web UI. For example:
 ```
 TASK [jenkins-k8s : INFO MESSAGE] **********************************
 ok: [68.183.216.2] =>
@@ -68,25 +69,25 @@ ok: [68.183.216.2] =>
 ```
 
 #### Last manual actions
-Jenkins is running, but without set up secrets it might fail first pipelines.  
+Jenkins is running, but without defined secrets it might fail on the first pipelines.  
 So we need to add a couple of secrets in Jenkins WEB UI.
 
 Correct secret IDs are:
   * docker-credentials
   * k8s-service-account
 
-1. Open http://IP.ADD.RE.SS:30000/credentials/
+1. Open Jenkins web UI http://IP.ADD.RE.SS:30000/credentials/
 2. Click on "Jenkins" down-arrow icon and click on "Add domain" in drop-down list.
 3. Create a new domain with some test naming. Click "OK".
 4. In Left Menu click "Add Credentials"
 5. Fill and save docker secrets:
   * Kind: Username with password
   * Scope: Global (Jenkins, nodes, items, all chield items, etc.)
-  * Username: <GET_USERNAME_FOR_DOCKERHUB>
-  * Password: <GET_TOKEN_FOR_DOCKERHUB>
+  * Username: <USERNAME_FOR_DOCKERHUB>
+  * Password: <TOKEN_FOR_DOCKERHUB>
   * ID: docker-credentials (correct name is very important here)
   * Description: any description you want
-6. Get kubernets admin service account (copy base64 ountput from master node):  
+6. Get kubernets admin service account (copy base64 output from master node):  
 ```ansible -b -m shell -a '[ -f /etc/kubernetes/admin.conf ] && cat /etc/kubernetes/admin.conf | base64' kube_nodes```
 7. Click on left menu "Add Credentials"
 8. Fill and save kubernetes secret:
@@ -98,10 +99,10 @@ Correct secret IDs are:
 #### Deploy
 Now we can proceed to the first deploy.
 Go to the job pipeline and click "Build Now".
-> pipeline should build docker image, push it into docker registry (username is taken from secret) and deploy to current K8s cluster.
+> pipeline should build docker image, push it into DockerHub registry (username is taken from secret) and deploy to current K8s cluster.
 You can see tiny web application running on http://IP.ADD.RE.SS:30001 (same IP as Jenkins WEB UI)
 
-Push some changes into the repo in provided by `ansible/group_vars/kube_nodes/jenkins.yml:jenkins_k8s_pipelines` and during a minute new pipeline should be triggered and, in a case of success, new application version will be deployed.
+Push some changes into the repo(s) provided by `ansible/group_vars/kube_nodes/jenkins.yml:jenkins_k8s_pipelines` and during a minute new pipeline should be triggered and, in a case of success, new application version will be deployed.
 
 ## Disclaimer
 The project is Proof-Of-Concept only.
@@ -112,7 +113,7 @@ Security issues:
 3. No kubernetes ingress/load-balancers, hostnames and HTTPS/SSL
 4. Only one node of 3 is a master node.
 5. There is a "local" storage located on a master k8s node mounted as PVC to keep Jenkins data.
-6. There is only one kubernetes admnin service account used for all purposes.
+6. There is only one kubernetes admin service account used for all purposes.
 7. Docker socket has RW permissions to allow jenkins user DinD usage.
 8. Jenkins main config.yml is delivered from ansible teplate to guarantee cloud settings (instead of usage XML-edit)
 9. Terraform state is local file.
