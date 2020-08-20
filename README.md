@@ -7,7 +7,7 @@ The goal of that repo is to launch CI/CD infrastructure in Kubernetes with minim
 ## Requirements
   - ansible >= 2.9
   - terraform >= 0.13
-  - sshpass (to allow ansible first with password authentication)
+  - sshpass (to allow first ansible play with password authentication)
   - access to Digital Ocean
 
 ## Guide
@@ -67,7 +67,7 @@ ok: [68.183.216.2] =>
     ================================================================
 ```
 
-#### Manual
+#### Last manual actions
 Jenkins is running, but without set up secrets it might fail first pipelines.  
 So we need to add a couple of secrets in Jenkins WEB UI.
 
@@ -86,7 +86,7 @@ Correct secret IDs are:
   * Password: <GET_TOKEN_FOR_DOCKERHUB>
   * ID: docker-credentials (correct name is very important here)
   * Description: any description you want
-6. Get kubernets admin service account (copy base64 ountput from master node):
+6. Get kubernets admin service account (copy base64 ountput from master node):  
 ```ansible -b -m shell -a '[ -f /etc/kubernetes/admin.conf ] && cat /etc/kubernetes/admin.conf | base64' kube_nodes```
 7. Click on left menu "Add Credentials"
 8. Fill and save kubernetes secret:
