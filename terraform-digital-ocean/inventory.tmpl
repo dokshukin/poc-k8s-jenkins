@@ -1,0 +1,4 @@
+[kube_nodes]
+%{ for k,v  in obj ~}
+${v.ipv4_address} %{ for t in v.tags }%{ if t == "kubernetes_role_master" }kubernetes_role="master"%{ endif }%{ endfor } # ${k}
+%{ endfor ~}

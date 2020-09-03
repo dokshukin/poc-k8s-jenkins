@@ -1,5 +1,6 @@
 *.retry
 **/.terraform
+*.tfvars
 
 # no centralized storage for state-files in test exercise.
 terraform.tfstate*

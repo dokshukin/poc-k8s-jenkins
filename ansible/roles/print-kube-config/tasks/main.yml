@@ -1,0 +1,14 @@
+- name: read and print config info
+  run_once: yes
+  when: kubernetes_role == 'master'
+  block:
+    - name: read config
+      slurp:
+        src: "{{ print_kube_config_path_conf }}"
+      register: _kube_config
+
+    - name: put content into your ~/.kube/config
+      pause:
+        seconds: 1
+        prompt: |
+          {{ _kube_config['content'] | b64decode }}

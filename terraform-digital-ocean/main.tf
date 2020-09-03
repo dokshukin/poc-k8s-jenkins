@@ -7,8 +7,3 @@
 # Configure the DigitalOcean Provider
 provider "digitalocean" {
 }
-
-# init server with preinstalled packages and predefined root password
-variable "user_data_path" {
-  default = "./cloud_init/user_data.yaml"
-}

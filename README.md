@@ -7,8 +7,11 @@ The goal of that repo is to launch CI/CD infrastructure in Kubernetes with minim
 ## Requirements
   - ansible >= 2.9
   - terraform >= 0.13
-  - sshpass (to allow first ansible play with password authentication)
+  - helm >= 3
+  - kubectl
   - access to Digital Ocean
+  - generated ssh key pair + uploaded pub key in DigitalOcean
+  
 
 ## Guide
 
@@ -29,72 +32,110 @@ export DIGITALOCEAN_TOKEN=here-should-be-your-token
 ```
 git clone https://github.com/dokshukin/poc-k8s-jenkins.git
 cd poc-k8s-jenkins/terraform-digital-ocean/
+```
+If your pub key doesn't match default value, please create `terraform.tfvars` file with content:  
+`pub_key = "/home/user/.ssh/your-key.pub"`
+
+Run:
+```
 terrafrom init
 terrafrom apply
 ```
-Terraform will create 3 servers for Kubernetes, some firewall rules, and set predefined password to the `root` user.
+Terraform will create 3 servers for Kubernetes, some firewall rules and will save output into ansible inventory file at `../ansible/inventories/kube_nodes`.
 
 
 ### Set up Kubernetes+CI/CD with Ansible
 Now we have 3 servers (droplets) running in Digital Ocean.
 
 #### Ansible
-Add your user(s) and ssh key(s) in `ansible/group_vars/all/users.yml`
-> alternatively add your keys in `terraform-digital-ocean/cloud_init/user_data.yaml` (not recommended, not tested)
 
-The tiny dynamic inventory script was written to make ansible repeatable in different environments.  
-First time ansible should be played with root user to create other users:
-```
-cd ../ansible
-ansible-playbook playbook.yml -t users -u root -k
-```
-There will appear prompt with request of password. Type it there, press ENTER.
-> sshpass need to be installed on your system to use `-k` flag with ansible
-
-From now you can use your ssh user+key pair to access servers and play ansible roles.
 > You have to wait 2-3 minutes after creating droplets with terraform to use apt.
 
 Let's spin up our service:
 ```
 ansible-playbook playbook.yml
 ```
-When ansible will finish its job (approx. 5 min) it will print the URL to connect to the Jenkins Web UI. For example:
+When ansible will finish its job (approx. 5 min) it will print kubernetes config. For example:
 ```
-TASK [jenkins-k8s : INFO MESSAGE] **********************************
-ok: [68.183.216.2] =>
-  msg: |-
-    ================================================================
-    Jenkins is running on http://68.183.216.2:30000
-    ================================================================
+TASK [print-kube-config : put content into your ~/.kube/config] ***********************************************************************************
+Pausing for 1 seconds
+(ctrl+C then 'C' = continue early, ctrl+C then 'A' = abort)
+[print-kube-config : put content into your ~/.kube/config]
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: ===
+    server: https://IP.ADD.RE.SS:6443
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: kubernetes-admin
+  name: kubernetes-admin@kubernetes
+current-context: kubernetes-admin@kubernetes
+kind: Config
+preferences: {}
+users:
+- name: kubernetes-admin
+  user:
+    client-certificate-data:  ==
+    client-key-data:  ===
 ```
+You'll need the key to connect to cluster and to save in Jenkins secrets.
+The easiest way is to save output YAML content of  <YOUR_KUBERNETES_CONFIG> in your `~/.kube/config`
+
+Check kubernets nodes connected:
+```
+kubectl get no
+NAME            STATUS   ROLES    AGE     VERSION
+ny-k8s-node01   Ready    master   3m54s   v1.17.11
+ny-k8s-node02   Ready    <none>   3m31s   v1.17.11
+ny-k8s-node03   Ready    <none>   3m31s   v1.17.11
+```
+
+### Helm
+Go to helm directory.
+```
+cd ../helm
+```
+Modify values.yml with your secrets:
+`master.adminPassword = `
+
+and section with
+```
+  JCasC:
+      secrets: |
+        credentials.system.domainCredentials:
+                - credentials:
+                    - usernamePassword:
+                        username: DOCKERHUB_USER
+                        password: DOCKERHUB_TOKEN
+```
+
+Run to helm release:
+```
+bash run.sh
+```
+
+
 
 #### Last manual actions
-Jenkins is running, but without defined secrets it might fail on the first pipelines.  
-So we need to add a couple of secrets in Jenkins WEB UI.
+Jenkins is running, but without defined secrets it might fail on the first pipelines during deploy process.  
+So we need to add a kubernetes secrets in Jenkins WEB UI.
 
-Correct secret IDs are:
-  * docker-credentials
-  * k8s-service-account
+Correct secret IDs is:
+  * k8s-config
 
 1. Open Jenkins web UI http://IP.ADD.RE.SS:30000/credentials/
-2. Click on "Jenkins" down-arrow icon and click on "Add domain" in drop-down list.
-3. Create a new domain with some test naming. Click "OK".
-4. In Left Menu click "Add Credentials"
-5. Fill and save docker secrets:
-  * Kind: Username with password
+2. Click on "global"
+3. In Left Menu click "Add Credentials"
+4. Fill and save docker secrets:
+  * Kind: Kubernetes configuration (kubeconfig)
   * Scope: Global (Jenkins, nodes, items, all chield items, etc.)
-  * Username: <USERNAME_FOR_DOCKERHUB>
-  * Password: <TOKEN_FOR_DOCKERHUB>
-  * ID: docker-credentials (correct name is very important here)
-  * Description: any description you want
-6. Get kubernets admin service account (copy base64 output from master node):  
-```ansible -b -m shell -a '[ -f /etc/kubernetes/admin.conf ] && cat /etc/kubernetes/admin.conf | base64' kube_nodes```
-7. Click on left menu "Add Credentials"
-8. Fill and save kubernetes secret:
-  * Kind: Secret Text
-  * Secret: paste base64 output here
-  * ID: k8s-service-account (correct name is very important here)
-  * Description: any description you want
+  * ID: k8s-config (correct name is very important here)
+  * Kubeconfig -> Enter directly
+  * Paste into content <YOUR_KUBERNETES_CONFIG>
+5. Save. Now we can relaunch job with all steps
 
 #### Deploy
 Now we can proceed to the first deploy.
@@ -109,11 +150,8 @@ The project is Proof-Of-Concept only.
 
 Security issues:
 1. No LAN. All K8s servers are using public NICs and IPs for communication.
-2. No Jenkins auth.
-3. No kubernetes ingress/load-balancers, hostnames and HTTPS/SSL
-4. Only one node of 3 is a master node.
-5. There is a "local" storage located on a master k8s node mounted as PVC to keep Jenkins data.
-6. There is only one kubernetes admin service account used for all purposes.
-7. Docker socket has RW permissions to allow jenkins user DinD usage.
-8. Jenkins main config.yml is delivered from ansible teplate to guarantee cloud settings (instead of usage XML-edit)
-9. Terraform state is local file.
+2. No kubernetes ingress/load-balancers, hostnames and HTTPS/SSL
+3. Only one node of 3 is a master node.
+4. There is only one kubernetes admin service account used for all purposes.
+5. Terraform state is local file.
+6. Helm secrets are not included from sources, sorry.

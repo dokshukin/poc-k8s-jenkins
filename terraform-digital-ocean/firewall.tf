@@ -26,24 +26,11 @@ resource "digitalocean_firewall" "k8s_firewall" {
     source_addresses = [
       "0.0.0.0/0",
     ]
+
   }
   inbound_rule {
     protocol   = "tcp"
     port_range = "80"
-    source_addresses = [
-      "0.0.0.0/0",
-    ]
-  }
-  inbound_rule {
-    protocol   = "tcp"
-    port_range = "6443"
-    source_addresses = [
-      "0.0.0.0/0",
-    ]
-  }
-  inbound_rule {
-    protocol   = "tcp"
-    port_range = "30000-32767"
     source_addresses = [
       "0.0.0.0/0",
     ]
@@ -71,6 +58,21 @@ resource "digitalocean_firewall" "k8s_firewall" {
     ]
   }
 
+  inbound_rule {
+    protocol   = "tcp"
+    port_range = "6443"
+    source_addresses = [
+      "0.0.0.0/0",
+    ]
+  }
+  inbound_rule {
+    protocol   = "tcp"
+    port_range = "30000-32767"
+    source_addresses = [
+      "0.0.0.0/0",
+    ]
+  }
+
   # for internal communication
   inbound_rule {
     protocol   = "tcp"
@@ -87,5 +89,8 @@ resource "digitalocean_firewall" "k8s_firewall" {
     ]
   }
 
+  depends_on = [
+    digitalocean_droplet.kube_node,
+  ]
 
 }

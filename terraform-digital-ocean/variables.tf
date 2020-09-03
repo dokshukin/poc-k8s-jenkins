@@ -20,6 +20,15 @@ variable "network_name" {
 
 variable "vm_size" {
   type    = string
-  // default = "s-1vcpu-1gb" // for testing purpose
-  default = "s-2vcpu-4gb"  // curl -sX GET -H 'Content-Type: application/json' -H "Authorization: Bearer $DIGITALOCEAN_TOKEN"  "https://api.digitalocean.com/v2/sizes" | jq .sizes[].slug
+  // curl -sX GET -H 'Content-Type: application/json' -H "Authorization: Bearer $DIGITALOCEAN_TOKEN"  "https://api.digitalocean.com/v2/sizes" | jq .sizes[].slug
+  // default = "s-1vcpu-1gb"
+  default = "s-2vcpu-4gb"
+}
+
+// Please redefine it in terraform.tfvars (and please use full path on MacOS)
+// example:
+// pub_key = "/home/user/.ssh/my_key.pub"
+variable "pub_key" {
+  type = string
+  default = "~/.ssh/id_rsa.pub"
 }
